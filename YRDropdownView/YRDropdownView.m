@@ -265,11 +265,16 @@ static YRDropdownView *currentDropdown = nil;
         dropdown.frame = dropdownFrame;
     }
     
+    if ([view isKindOfClass:[UIScrollView class]]) {
+        [view addObserver:dropdown forKeyPath:@"contentOffset" options:NSKeyValueObservingOptionNew context:NULL];    
+    }
+    
     [view addSubview:dropdown];
     [dropdown show:animated];
     if (delay != 0.0) {
         [dropdown performSelector:@selector(hideUsingAnimation:) withObject:[NSNumber numberWithBool:animated] afterDelay:delay+ANIMATION_DURATION];
     }
+    
 
     return dropdown;
 }
@@ -281,6 +286,7 @@ static YRDropdownView *currentDropdown = nil;
         return;
     }
     
+    [currentDropdown removeObservers];
     [currentDropdown removeFromSuperview];
     
 #if !(__has_feature(objc_arc))
@@ -371,8 +377,18 @@ static YRDropdownView *currentDropdown = nil;
     }
 }
 
+- (void)removeObservers {
+    @try{
+        // unregister any scrollview movement observation callbacks.
+        [self.superview removeObserver:self forKeyPath:@"contentOffset"];
+    }@catch(id anException){
+        // we weren't ignoring this time, ignore the failed removal.
+    }
+}
+
 - (void)done
 {
+    [self removeObservers];
     [self removeFromSuperview];
 }
 
@@ -519,6 +535,16 @@ static YRDropdownView *currentDropdown = nil;
     else 
     {
         _tapQueue = dispatch_get_main_queue();
+    }
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if (object == self.superview)
+    {
+        CGPoint contentOffset = [[change valueForKey:@"new"] CGPointValue];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.layer.transform = CATransform3DMakeTranslation(contentOffset.x, contentOffset.y, 0.0);
+        });
     }
 }
 
